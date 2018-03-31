@@ -1,0 +1,183 @@
+\documentclass[11pt]{article}
+\usepackage[margin=22mm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[urw-garamond]{mathdesign}
+\usepackage{garamondx}
+\usepackage{microtype}
+\usepackage[yyyymmdd]{datetime}
+\usepackage[colorlinks=true,linkcolor=blue,urlcolor=cyan]{hyperref}
+\usepackage[hyperref=true,backend=biber,style=alphabetic,sorting=ynt]{biblatex}
+
+\addbibresource{3-toy-type-systems.bib}
+
+\usepackage{enumitem}
+\usepackage{amsmath}
+\usepackage{prftree}
+\usepackage{cancel}
+
+\renewcommand{\dateseparator}{--}
+\newlist{legal}{enumerate}{10}\setlist[legal]{label*=\arabic*.}
+
+\setlength{\parindent}{0mm}
+\setlength{\parskip}{3mm plus1mm minus1mm}
+\setcounter{section}{-1}
+
+\begin{document}
+
+{\LARGE Three toy type systems} \\[2mm]
+{\Large \itshape davidad} \\[2mm]
+{\large \today}
+
+\section{Introduction}
+
+\subsection{Purpose}
+
+This document represents the fulfillment of the following task: to identify and/or develop 3 extremely small (``toy'') type systems, which despite their minimal complexity demonstrate dramatically different approaches to typing: old-style static typing, static typing with generics, and dynamic typing.
+The purpose of this exercise is to use these type systems as examples for reasoning about how future system designs under the IPLD umbrella might, in a principled and theoretically sound way, enable interoperability between code written in languages with such dramatically different approaches to typing as Go, Rust, and JavaScript.
+
+\subsection{Overview}
+
+In this document, we present, using uniform notation, three such type systems:
+\begin{enumerate}
+	\item The first, System F, also known as second-order lambda calculus, is a well-studied extension of the simply-typed $\lambda$-calculus to handle parametric polymorphism (generics), and is the sort of system that would likely be known by aliens---it is so natural that it was independently discovered by Jean-Yves Girard \cite{Girard72} and John Reynolds \cite{Reynolds74} two years apart.
+	\item The second, Featherweight Java (or FJ), was introduced in \cite{Igarashi01} to ``bear a similar relation to Java as the $\lambda$-calculus does to languages such as ML and Haskell,'' presented here with minor alterations. Unlike System F, it includes class-based inheritance, but it does not include generics.\footnote{Although it is extremely simplified from Java, I would still consider it unlikely to be in use by aliens.}
+	\item The final type system, Featherweight JavaScript (or FJS), is a ``uni-typed'' system (the only type is \textsf{Expr}) which gives syntax to a tiny language inspired by \cite{Zhang16}, with the addition of ``objects'' (dictionaries).
+\end{enumerate}
+
+Note that at this stage, we are not concerning ourselves with mismatches in the primitive types. 
+To make this explicit, we supply \textsf{Num} and \textsf{Bool} as the primitive types for all three type systems, with only superficial differences.
+
+\section{Type system F (static with generics)}
+
+\fbox{\begin{minipage}{\textwidth}
+	\textbf{Simply-typed $\lambda$-calculus}: \begin{gather*}
+	\begin{gathered}
+		\prftree[r]{\textsc{Abs}}{\Gamma, x:A \vdash e:B}{\Gamma\vdash (\lambda x:A . e) : A \rightarrow B} \\
+		\prftree[r]{\textsc{App}}{\Gamma \vdash x : A \rightarrow B}{\Gamma \vdash y : A}{\Gamma \vdash xy : B} \\
+	\end{gathered}
+		\qquad
+	\begin{gathered}
+		\prftree[r]{\textsc{Var}}{(x:A)\in\Gamma}{\Gamma\vdash x : A} \\
+	\end{gathered}
+	\end{gather*}
+	\textbf{System F}: \begin{gather*}
+		\prftree[r]{\textsc{F-TAbs}}{\Gamma \vdash t:A}{\alpha \not\in \Gamma}{\Gamma \vdash \Lambda \alpha. t : \forall \alpha . A} \\
+		\prftree[r]{\textsc{F-TApp}}{\Gamma \vdash t : \forall \alpha . A}{\Gamma \vdash tB : A[\alpha \rightarrow B]}
+	\end{gather*}
+\end{minipage}}
+
+As in the untyped $\lambda$-calculus, product types and sum types can be encoded into System F as appropriate polymorphic function types (using the principles of Church encoding):
+\[A \times B := \forall \alpha. (A \rightarrow B \rightarrow \alpha) \rightarrow \alpha\]
+\[A + B := \forall \alpha. (A \rightarrow \alpha) \rightarrow (B \rightarrow \alpha) \rightarrow \alpha\]
+
+Even recursive types can be so encoded, for example the generic type of lists:
+\[\textsf{List}\,A := \forall \alpha. \left(A \rightarrow \left(\alpha \rightarrow \alpha\right)\right) \rightarrow \left(\alpha \rightarrow \alpha\right)\]
+
+However, in the interest of maintaining uniformity of primitive types, we define non-Church-encoded \textsf{Bool} and \textsf{Num}, with a simplified set of operators, as follows. \\[3mm]
+\textbf{Primitive types}: \begin{gather*}
+\begin{gathered}
+	\prftree{}{\Gamma \vdash \texttt{true} : \textsf{Bool}} \qquad
+	\prftree{}{\Gamma \vdash \texttt{false}: \textsf{Bool}} \\
+	\prftree{\Gamma \vdash x : \textsf{Bool}}{\Gamma \vdash e_1 : A}{\Gamma \vdash e_2 : A}{\Gamma \vdash (\texttt{if}\;x\;\texttt{then}\;e_1\;\texttt{else}\;e_2) : A}
+\end{gathered}
+	\qquad
+\begin{gathered}
+	\prftree{\Gamma \vdash x : \textsf{Num}}{\Gamma \vdash y : \textsf{Num}}{\Gamma \vdash x\;\texttt{+}\;y : \textsf{Num}} \\
+	\prftree{\Gamma \vdash x : \textsf{Num}}{\Gamma \vdash y : \textsf{Num}}{\Gamma \vdash x\;\texttt{-}\;y : \textsf{Num}} \\
+	\prftree{\Gamma \vdash x : \textsf{Num}}{\Gamma \vdash y : \textsf{Num}}{\Gamma \vdash x\;\texttt{*}\;y : \textsf{Num}} \\
+	\prftree{\Gamma \vdash x : \textsf{Num}}{\Gamma \vdash y : \textsf{Num}}{\Gamma \vdash x\;\texttt{/}\;y : \textsf{Num}}
+\end{gathered}
+	\qquad
+\begin{gathered}
+	\prftree{n \in \mathbb{N}}{\Gamma \vdash \ulcorner n \urcorner : \textsf{Num}} \\
+	\prftree{\Gamma \vdash x : \textsf{Num}}{\Gamma \vdash x > 0 : \textsf{Bool}}
+\end{gathered}
+\end{gather*}
+
+\section{Type system FJ (static with inheritance)}
+
+\fbox{\begin{minipage}{\textwidth}
+	\textbf{Expression typing}: \begin{gather*}
+		\prftree[r]{\textsc{Var}}{(x:A)\in\Gamma}{\Gamma\vdash x : A} \\
+		\prftree[r]{\textsc{FJ-Field}}{\Gamma \vdash x : A}{\textit{fields}(A) \ni B\;\texttt{f}}{\Gamma \vdash x\texttt{.f} : B} \\
+		\prftree[r]{\textsc{FJ-Invk}}{\Gamma \vdash x : A}{\overline{\underline{\Gamma} \vdash e : B}}{\overline{B <: C}}{\textit{mtype}(\texttt{m},A)=\overline{C}\rightarrow D}{\Gamma \vdash x\texttt{.m(}\overline{e}\texttt{)} : D}\\
+		\prftree[r]{\textsc{FJ-New}}{\textit{fields}(A)=\overline{C\;\texttt{f}}}{\overline{\underline{\Gamma} \vdash e : B}}{\overline{B <: C}}{\Gamma \vdash \texttt{new}\;A\texttt{(}\overline{e}\texttt{)} : A} \\
+		\prftree[r]{\textsc{FJ-UCast}}{\Gamma \vdash e : A}{A <: B}{\Gamma \vdash \texttt{(}B\texttt{)} e : B} \quad
+		\prftree[r]{\textsc{FJ-DCast}}{\Gamma \vdash e : A}{B <: A}{B \not= A}{\Gamma \vdash \texttt{(}B\texttt{)} e : B} \\
+		\prftree[r]{\textsc{FJ-SCast}}{\Gamma \vdash e : A}{A \cancel{<:} B}{B \cancel{<:} A}{\textrm{illegal cast}}{\Gamma \vdash \texttt{(}B\texttt{)} e : B} 
+	\end{gather*}
+	\textbf{Subtyping}: \begin{gather*}
+		\prftree{}{C <: C} \qquad
+		\prftree{\texttt{class}\;C\;\texttt{extends}\;D}{D <: E}{C <: E}
+	\end{gather*}
+	\textbf{Method checking}: \begin{gather*}
+		\prftree[r]{\textsc{FJ-Method}}{\overline{x : T}, \texttt{this} : C \vdash e : A}{A <: B}{\texttt{class}\;C\;\texttt{extends}\;D}{\left(\textit{mtype}(\texttt{m},D) = \overline{E}\rightarrow F\right) \Rightarrow \overline{T = E},\,B = F}{B\texttt{ m(}\overline{T\;x}\texttt{)\{ return }e\texttt{; \}}\quad\mbox{OK in $C$}}
+	\end{gather*}
+	\textbf{Class checking}: \begin{gather*}
+		\prftree[r]{\textsc{FJ-Class}}{K = C\texttt{($\overline{D \texttt{g}}$, $\overline{C \texttt{f}}$)\{super($\overline{g}$); $\overline{\texttt{this.f=f;}}$\}}}{\textit{fields}(D)=\overline{D \texttt{g}}}{\overline{M\;\mbox{OK in $C$}}}{\texttt{class $C$ extends $D$ {$\overline{C \texttt{f}}$; $K$ $\overline{M}$}}\quad\mbox{OK}}
+	\end{gather*}
+\end{minipage}} \\[3mm]
+\textbf{Primitive types}: \begin{gather*}
+\begin{gathered}
+	\prftree{}{\Gamma \vdash \texttt{true} : \textsf{Bool}} \qquad
+	\prftree{}{\Gamma \vdash \texttt{false}: \textsf{Bool}} \\
+	\prftree{\Gamma \vdash x : \textsf{Bool}}{\Gamma \vdash e_1 : A}{\Gamma \vdash e_2 : A}{\Gamma \vdash (x\;\texttt{?}\;e_1\;\texttt{:}\;e_2) : A}
+\end{gathered}
+	\qquad
+\begin{gathered}
+	\prftree{\Gamma \vdash x : \textsf{Num}}{\Gamma \vdash y : \textsf{Num}}{\Gamma \vdash x\;\texttt{+}\;y : \textsf{Num}} \\
+	\prftree{\Gamma \vdash x : \textsf{Num}}{\Gamma \vdash y : \textsf{Num}}{\Gamma \vdash x\;\texttt{-}\;y : \textsf{Num}} \\
+	\prftree{\Gamma \vdash x : \textsf{Num}}{\Gamma \vdash y : \textsf{Num}}{\Gamma \vdash x\;\texttt{*}\;y : \textsf{Num}} \\
+	\prftree{\Gamma \vdash x : \textsf{Num}}{\Gamma \vdash y : \textsf{Num}}{\Gamma \vdash x\;\texttt{/}\;y : \textsf{Num}}
+\end{gathered}
+	\qquad
+\begin{gathered}
+	\prftree{n \in \mathbb{N}}{\Gamma \vdash \ulcorner n \urcorner : \textsf{Num}} \\
+	\prftree{\Gamma \vdash x : \textsf{Num}}{\Gamma \vdash x > 0 : \textsf{Bool}}
+\end{gathered}
+\end{gather*}
+
+\section{Type system FJS (dynamic)}
+
+This ``type system'' actually provides \textit{no} static type-checking at all; however, it is less dynamic than JavaScript in one respect: it does statically check whether variables are in scope! But it does not check for, e.g., the existence of fields being retrieved or updated, let alone rejecting expressions like \texttt{false + 5}. (Such expressions would, of course, result in run-time errors; like the other systems presented here, however, run-time semantics is not yet formally specified.)
+
+\fbox{\begin{minipage}{\textwidth}
+	\textbf{Functions}: \begin{gather*}
+	\begin{gathered}
+		\prftree[r]{\textsc{FJS-Abs}}{\Gamma, x : \textsf{Expr} \vdash e : \textsf{Expr}}{\Gamma \vdash \texttt{function(}\overline{x}\texttt{)}\;\texttt{\{} e \texttt{\}} : \textsf{Expr}} \\
+		\prftree[r]{\textsc{FJS-App}}{\Gamma \vdash x : \textsf{Expr}}{\overline{\Gamma \vdash y : \textsf{Expr}}}{\Gamma \vdash x\texttt{(}\overline{y}\texttt{)} : \textsf{Expr}} \\
+	\end{gathered}
+		\qquad
+	\begin{gathered}
+		\prftree[r]{\textsc{FJS-Var}}{(x:\textsf{Expr})\in\Gamma}{\Gamma\vdash x : \textsf{Expr}} \\
+	\end{gathered}
+	\end{gather*}
+	\textbf{Objects}: \begin{gather*}
+		\prftree[r]{\textsc{FJS-EmptyObj}}{}{\Gamma \vdash \texttt{\{\}} : \textsf{Expr}} \\
+		\prftree[r]{\textsc{FJS-Field}}{\Gamma \vdash x : \textsf{Expr}}{\Gamma \vdash x\texttt{.f} : \textsf{Expr}} \quad
+		\prftree[r]{\textsc{FJS-FieldUpdate}}{\Gamma \vdash x : \textsf{Expr}}{\Gamma \vdash e : \textsf{Expr}}{\Gamma \vdash x\texttt{[f}\;\texttt{:=}\;e\texttt{]} : \textsf{Expr}} \\
+	\end{gather*}
+\end{minipage}} \\[3mm]
+\textbf{Primitive types}: \begin{gather*}
+\begin{gathered}
+	\prftree{}{\Gamma \vdash \texttt{true} : \textsf{Expr}} \qquad
+	\prftree{}{\Gamma \vdash \texttt{false}: \textsf{Expr}} \\
+	\prftree{\Gamma \vdash x : \textsf{Expr}}{\Gamma \vdash e_1 : \textsf{Expr}}{\Gamma \vdash e_2 : \textsf{Expr}}{\Gamma \vdash (x\;\texttt{?}\;e_1\;\texttt{:}\;e_2) : \textsf{Expr}}
+\end{gathered}
+	\qquad
+\begin{gathered}
+	\prftree{\Gamma \vdash x : \textsf{Expr}}{\Gamma \vdash y : \textsf{Expr}}{\Gamma \vdash x\;\texttt{+}\;y : \textsf{Expr}} \\
+	\prftree{\Gamma \vdash x : \textsf{Expr}}{\Gamma \vdash y : \textsf{Expr}}{\Gamma \vdash x\;\texttt{-}\;y : \textsf{Expr}} \\
+	\prftree{\Gamma \vdash x : \textsf{Expr}}{\Gamma \vdash y : \textsf{Expr}}{\Gamma \vdash x\;\texttt{*}\;y : \textsf{Expr}} \\
+	\prftree{\Gamma \vdash x : \textsf{Expr}}{\Gamma \vdash y : \textsf{Expr}}{\Gamma \vdash x\;\texttt{/}\;y : \textsf{Expr}}
+\end{gathered}
+	\qquad
+\begin{gathered}
+	\prftree{n \in \mathbb{N}}{\Gamma \vdash \ulcorner n \urcorner : \textsf{Expr}} \\
+	\prftree{\Gamma \vdash x : \textsf{Expr}}{\Gamma \vdash x > 0 : \textsf{Expr}}
+\end{gathered}
+\end{gather*}
+
+\printbibliography
+
+\end{document}
