@@ -1,0 +1,317 @@
+\documentclass[11pt]{article}
+\usepackage[margin=20mm]{geometry}
+\usepackage[T1]{fontenc}
+%\usepackage[urw-garamond]{mathdesign}
+\usepackage{inconsolata}
+\usepackage{garamondx}
+\usepackage{microtype}
+\usepackage[yyyymmdd]{datetime}
+\usepackage[colorlinks=true,linkcolor=blue,urlcolor=cyan]{hyperref}
+\usepackage[hyperref=true,backend=biber,style=alphabetic,sorting=ynt]{biblatex}
+
+%\addbibresource{3-toy-type-systems.bib}
+
+\usepackage{enumitem}
+\usepackage{amsmath}
+\usepackage{prftree}
+\usepackage{listings}
+\usepackage{cancel}
+
+\lstdefinelanguage{L0}{%
+  sensitive%
+, morecomment=[l]{//}%
+, morecomment=[s]{/*}{*/}%
+, moredelim=[s][{\itshape\color[rgb]{0,0,0.75}}]{\#[}{]}%
+, morestring=[b]{"}%
+, alsodigit={}%
+, alsoother={}%
+, alsoletter={!}%
+%
+, morekeywords={break, continue, else, for, if, in, loop, match, return, while}
+, morekeywords={as, const, let, move, mut, ref, static}
+, morekeywords={enum, fn, impl, Self, self, struct, trait, type, use, where}
+, morekeywords={crate, extern, mod, pub, super}
+, morekeywords={unsafe}
+, morekeywords={abstract, alignof, become, box, do, final, macro, offsetof, override, priv, proc, pure, sizeof, typeof, unsized, virtual, yield}
+%
+, morekeywords=[2]{bool, char, f32, f64, i8, i16, i32, i64, isize, str, u8, u16, u32, u64, unit, usize, i128, u128}  % primitive types
+%
+, morekeywords=[3]{Err, false, None, Ok, Some, true}  % prelude value constructors
+%
+, morekeywords=[4]{Option, Vec}
+%
+, morekeywords=[5]{Cid, signed}
+}%
+
+\lstdefinestyle{colouredL0}%
+{ basicstyle=\ttfamily\small%
+, identifierstyle=%
+, commentstyle=\color[gray]{0.4}%
+, stringstyle=\color[rgb]{0, 0, 0.5}%
+, keywordstyle=\bfseries\color[rgb]{0.5, 0, 0}% reserved keywords
+, keywordstyle=[2]\color[rgb]{0, 0.5, 0}% primitive types
+, keywordstyle=[3]\color[rgb]{0, 0.5, 0}% type and value constructors
+, keywordstyle=[4]\color[rgb]{0.5, 0.5, 0}% type and value constructors
+, keywordstyle=[5]\color[rgb]{0.5, 0, 0.5}% type and value constructors
+, columns=spaceflexible%
+, keepspaces=true%
+, showspaces=false%
+, showtabs=false%
+, showstringspaces=true%
+, language=L0%
+}%
+
+\lstdefinestyle{boxed}{
+  style=colouredL0%
+, numbers=left%
+, firstnumber=auto%
+, numberblanklines=true%
+, numberstyle=\scriptsize\color[gray]{0.33}%
+, frame=leftline%
+, numbersep=7pt%
+, framesep=5pt%
+, framerule=10pt%
+, xleftmargin=15pt%
+, backgroundcolor=\color[gray]{0.975}%
+, rulecolor=\color[gray]{0.87}%
+}%
+
+\lstset{style=boxed}
+
+\renewcommand{\dateseparator}{--}
+\newlist{legal}{enumerate}{10}\setlist[legal]{label*=\arabic*.}
+
+\setlength{\parindent}{0mm}
+\setlength{\parskip}{3mm plus1mm minus1mm}
+\setcounter{section}{-1}
+
+\begin{document}
+
+{\LARGE Sketches of IPLD example apps \textit{\&} their data structures} \\[2mm]
+{\large Compiled \today}
+
+\section{Introduction}
+
+This document is compiled from a selection of five examples that were brainstormed during a session in Lisbon on 2018-05-13, linked from the bottom of \href{https://docs.google.com/document/d/1PIV5VjFeI_CGU8Fh0-ZaEOhV-ACa8NvZr3hPOH9eWsE/view}{this Google doc}. Each sketch fits on its own page. I (\texttt{@davidad}) have edited them somewhat, mostly to harmonize variations in the choice of syntax\footnote{This is to facilitate comparisons across the different examples; the decisions of what kinds of syntax to use here have not been thought through carefully and are not intended as proposals about the default surface-syntax of L0.}.
+
+Potential uses of this document include: \begin{itemize}
+\item as a ballpark sketch of the motivation and scope of IPLD's medium-term ambitions
+\item as an inspiration for generating new open questions (``wait, how would \textit{that} work?'')
+\item to provide a grounding, concrete reference point for consideration of future IPLD language features
+\end{itemize}
+
+Note that the final example, \hyperref[sec:dirs]{IPFS Directories}, involves \texttt{trait}s (also known as interfaces or typeclasses), which may be a post-L0 feature.
+
+\newpage
+\section{Filecoin (orig. \texttt{@dignifiedquire})}
+
+\begin{lstlisting}
+type Block = struct {
+    // reference to the previous block
+    // only `None`, for the genesis block
+    parent: Option<Cid<Block>>,
+    // hash of the statetree after execution of all included messages
+    state: Cid<StateTree>,
+    // a list of all state transitions this block entails
+    timestamp: DateTime,
+    messages: Cid<Vec<Message>>,
+    // a list of all receipts, for the messages included in this block
+    message_receipts: Cid<Vec<MessageReceipt>>,
+};
+
+impl Block {
+    fn Hash() -> Hash {}
+};
+
+type Message = struct {
+    // None if this message is not signed
+    signature: Option<Hash>,
+    // what is the Method type, would be great to tie in the exports with IPLD, not clear how
+    method: Method,
+    args: Vec<u8>,
+    to: Address,
+    from: Address,
+};
+
+type MessageReceipt = struct {
+    exit_code: u8,
+    result_ptr: u32,
+    result_size: u32,
+};
+
+type Address = Vec<u8>;
+type Hash = Vec<u8>;
+
+type StateTree = Map<Address, Actor>;
+
+type Actor = struct {
+    balance: u64,
+    // how is storage modeled?
+    // could be just Vec<u8>
+    storage: Cid<Vec<u8>>,
+    public_key: Option<Vec<u8>>,
+};
+
+// How to model concrete actors vs the type actor that represents an actor on the host level?
+impl Actor {
+    // is this right? how to do this?
+    fn Exports(&self) -> Vec<Method>;
+
+    // public exports go here, but they are not part of the actor
+    // need to mention actors' types, i.e. IPLD about IPLD types. not sure how to express this
+};
+\end{lstlisting}
+
+\newpage
+\section{Decentralized Twitter}
+
+\begin{lstlisting}
+type User = struct {
+  id: PubKey,
+  handle: Utf8String,
+  displayName: Utf8String,
+  bio: BoundedArray<Utf8Char, 140>,
+  profilePic: Hash<Image>,
+  coverPic: Hash<Image>,
+  tweet_HEAD: LatestSigned<TweetEntry, id>,
+  like_HEAD: LatestSigned<LikeEntry, id>,
+};
+
+type TweetEntry = signed struct {
+  parents: List<Hash<TweetEntry>>, // previous commits from this user
+  timestamp: DateTime,
+  tweet: enum Tweet {
+    PlainTweet: struct {
+      text: BoundedArray<Utf8Char, 280>,
+    },
+    ReplyTweet: struct {
+      inReplyTo: List<Hash<TweetEntry>>,
+      text: BoundedArray<Utf8Char, 280>,
+    },
+    PlainRetweet: struct {
+      retweetOf: Hash<TweetEntry>,
+    },
+    RetweetWithComment: struct {
+      retweetOf: Hash<TweetEntry>,
+      text: BoundedArray<Utf8Char, 280>,
+    },
+  },
+};
+
+type LikeEntry = signed struct {
+  parents: List<Hash<LikeEntry>>, // previous commits from this user
+  likeOf: Hash<TweetEntry>,
+};
+\end{lstlisting}
+
+\newpage
+\section{IPRS (orig. \texttt{@diasdavid})}
+
+\begin{lstlisting}
+type SignedRecord = struct {
+  record: Record,              // record or link to record
+  Signature: Vec<u8>,          // signature of the record (Value + Scheme + ValidityData)
+  PublicKey: PublicKey,
+};
+
+type Record = struct {
+  Value:    []byte,
+  Scheme:   Cid,               // scheme to validate the record (expiry date, geographic location, etc)
+  ValidityData: ValidityData,
+};
+
+type ValidityData = struct {
+  ExpiryDate: DateTime,
+  GeoLocation: XYCoordinates,  // XYCoordinates and range
+  Ancestry: Cid,               // only valid in the presence of another record
+  SeqNumber: u32,
+};
+
+type Identity = struct {
+  SecretKey: SecretKey,
+  PublicKey: PublicKey,
+};
+
+type SecretKey = Vec<u8>;     // possibly more than an array in the future (i.e Linked-Data Key / MultiKey)
+type PublicKey = Vec<u8>;
+\end{lstlisting}
+
+\newpage
+\section{Collaborative Real-Time Applications (orig. \texttt{@diasdavid})}
+
+\begin{lstlisting}
+type User = struct {
+  KeyPair: KeyPair,
+  Details: Person, // http://schema.org/Person
+};
+
+type Capability = struct {    // granting access to a private resource through symmetric crypto
+  CypherData: CID,
+  AccessKey: SharedKey,
+};
+
+type Authorization = struct   // granting other users permission or self proving permission
+  IssuerSignature: Vec<u8>,
+  Receiver: Publickey,
+};
+
+type KeyPair = struct {
+  SecretKey: SecretKey,
+  PublicKey: PublicKey,
+};
+
+type SecretKey = Vec<u8>;     // possibly more than an array in the future (i.e Linked-Data Key / MultiKey)
+type PublicKey = Vec<u8>;
+type SharedKey = Vec<u8>;     // symmetricKey
+\end{lstlisting}
+
+\newpage
+\section{IPFS Directories (orig. \texttt{@stebalien})}
+\label{sec:dirs}
+
+\begin{lstlisting}
+trait Iterable {
+    type Item;
+    fn map<T>(self, cb: fn(item: &Self::Item) -> T) -> Iterable<Item = T>;
+    fn skip(self, n: NonNegative) -> Iterable<Item = Self::Item>;
+    fn take(self, n: NonNegative) -> Iterable<Item = Self::Item>;
+};
+
+trait Collection: Iterable {
+    fn length(&self) -> NonNegative;
+};
+
+struct Range {
+    start: NonNegative,
+    length: NonNegative,
+};
+
+trait IndexedCollection: Collection + Map<Key=NonNegative, Value=Self::Item> {
+    fn slice(self, range: Range) -> Option<IndexedCollection>;
+    fn splice(self, range: Range, Collection<Item=Self::Item>) -> Option<Collection<Item=Self::Item>>
+};
+
+trait Map {
+  type Key;
+  type Value;
+
+  fn get(&self, name: Self::Key) -> Option<Self::Value>;
+  fn update(self, name: Self::Key, value: Self::Value) -> Option<Map<Key=Self::Key, Value=Self::Value>>;
+};
+
+trait FsObject {
+    fn created_at(&self) -> Time;
+    fn modified_at(&self) -> Time;
+};
+
+// Directories are collections of file objects.
+//
+// To *use* the file objects, you'll have to *cast* to a Directory, File, etc.
+trait Directory:
+    Collection<Item = Cid<FsObject>> + Map<Key = String, Value = Cid<FsObject>> + FsObject
+{
+};
+trait RegularFile: FsObject + Collection<Item = u8> {};
+\end{lstlisting}
+
+\end{document}
