@@ -215,7 +215,7 @@ type SignedRecord = struct {
 };
 
 type Record = struct {
-  Value:    []byte,
+  Value:    Vec<u8>,
   Scheme:   Cid,               // scheme to validate the record (expiry date, geographic location, etc)
   ValidityData: ValidityData,
 };
